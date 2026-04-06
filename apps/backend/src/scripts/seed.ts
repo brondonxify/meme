@@ -2,11 +2,11 @@ import mysql from 'mysql2/promise';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import bcrypt from 'bcryptjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Helper to manually load .env file
 async function loadEnv() {
     try {
         const envPath = path.resolve(__dirname, '../../.env');
@@ -17,7 +17,6 @@ async function loadEnv() {
             if (match) {
                 const key = match[1];
                 let value = match[2] || '';
-                // Remove quotes if present
                 if (value.startsWith('"') && value.endsWith('"')) {
                     value = value.slice(1, -1);
                 }
@@ -26,140 +25,151 @@ async function loadEnv() {
                 }
             }
         }
-        console.log('Loaded environment variables manually.');
-    } catch (error) {
-        console.warn('Could not load .env file, assuming env vars are set.', error);
+    } catch {
+        // env vars already set
     }
 }
 
+function slugify(text: string): string {
+    return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+function generateSKU(name: string, index: number): string {
+    const prefix = name.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
+    return `${prefix}-${String(index).padStart(4, '0')}`;
+}
+
+function generateInvoiceNo(date: Date, index: number): string {
+    const yyyymmdd = date.toISOString().slice(0, 10).replace(/-/g, '');
+    return `INV-${yyyymmdd}-${String(index).padStart(4, '0')}`;
+}
+
 async function seed() {
-    console.log('🌱 Starting database seeding...');
+    console.log('Starting HI-TECH database seeding...');
     await loadEnv();
 
+    const connection = await mysql.createConnection({
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT || '3306'),
+        user: process.env.DB_USER || 'root',
+        password: process.env.DB_PASSWORD || '',
+        database: process.env.DB_NAME || 'new',
+        multipleStatements: true
+    });
+
+    console.log('Connected to database.');
+
     try {
-        const connection = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            port: parseInt(process.env.DB_PORT || '3306'),
-            user: process.env.DB_USER || 'root',
-            password: process.env.DB_PASSWORD || '',
-            database: process.env.DB_NAME || 'maximus_telecom',
-            multipleStatements: true
-        });
-
-        console.log('Connected to database.');
-
-        // Seed Categories
-        console.log('📁 Seeding categories...');
+        // Drop all tables in reverse dependency order
+        console.log('Cleaning database...');
         await connection.query(`
-            INSERT INTO category (name, description) VALUES
-            ('Electronics', 'Electronic devices and gadgets'),
-            ('Smartphones', 'Mobile phones and accessories'),
-            ('Laptops', 'Portable computers and accessories'),
-            ('Audio', 'Headphones, speakers, and audio equipment'),
-            ('Accessories', 'Various tech accessories')
+            SET FOREIGN_KEY_CHECKS = 0;
+            DROP TABLE IF EXISTS payments;
+            DROP TABLE IF EXISTS contact_messages;
+            DROP TABLE IF EXISTS article_specification;
+            DROP TABLE IF EXISTS specification;
+            DROP TABLE IF EXISTS inventory_log;
+            DROP TABLE IF EXISTS notification;
+            DROP TABLE IF EXISTS order_details;
+            DROP TABLE IF EXISTS orders;
+            DROP TABLE IF EXISTS article;
+            DROP TABLE IF EXISTS category;
+            DROP TABLE IF EXISTS coupon;
+            DROP TABLE IF EXISTS staff;
+            DROP TABLE IF EXISTS staff_roles;
+            DROP TABLE IF EXISTS customer;
+            DROP TABLE IF EXISTS admin;
+            SET FOREIGN_KEY_CHECKS = 1;
         `);
-        console.log('✅ Categories seeded');
 
-        // Seed Admin
-        console.log('🔐 Seeding admin users...');
+        // Run schema migration
+        const schemaPath = path.join(__dirname, '../db/migrations/001_full_schema.sql');
+        const schemaSql = await fs.readFile(schemaPath, 'utf8');
+        await connection.query(schemaSql);
+
+        const adminPassword = await bcrypt.hash('admin123', 10);
+        const customerPassword = await bcrypt.hash('password123', 10);
+
+        // 1. Admin
+        await connection.query(
+            'INSERT INTO admin (username, email, password, role) VALUES (?, ?, ?, ?)',
+            ['admin', 'admin@meme.com', adminPassword, 'super_admin']
+        );
+
+        // 2. Categories
+        console.log('Seeding HI-TECH Categories...');
+        const categories = [
+            { name: 'Laptops', desc: 'Powerful portable stations for work and gaming' },
+            { name: 'Computers', desc: 'Desktop PCs, Workstations, and Servers' },
+            { name: 'Accessories', desc: 'High-quality peripherals for your setup' },
+            { name: 'Networking', desc: 'Secure and fast networking solutions' },
+            { name: 'Smart Devices', desc: 'Connected home and office tech' }
+        ];
+        for (const cat of categories) {
+            await connection.query(
+                'INSERT INTO category (name, slug, description, published) VALUES (?, ?, ?, true)',
+                [cat.name, slugify(cat.name), cat.desc]
+            );
+        }
+
+        // 3. Products
+        console.log('Seeding HI-TECH Products...');
+        const products = [
+            // Laptops (Cat 1)
+            { name: 'MacBook Pro M3 Max 16"', cat: 1, cost: 2500000, sell: 3200000, stock: 10, img: '/products/1.jpg' },
+            { name: 'Dell XPS 15 9530', cat: 1, cost: 1200000, sell: 1550000, stock: 15, img: '/products/2.jpg' },
+            { name: 'HP Spectre x360', cat: 1, cost: 850000, sell: 1050000, stock: 12, img: '/products/3.jpg' },
+            
+            // Computers (Cat 2)
+            { name: 'iMac 24" M3 Blue', cat: 2, cost: 950000, sell: 1250000, stock: 8, img: '/products/4.jpg' },
+            { name: 'Custom Gaming Rig RTX 4080', cat: 2, cost: 1800000, sell: 2450000, stock: 5, img: '/products/5.jpg' },
+            
+            // Accessories (Cat 3)
+            { name: 'Keychron K2 Mechanical Keyboard', cat: 3, cost: 65000, sell: 95000, stock: 30, img: '/products/6.jpg' },
+            { name: 'Logitech MX Master 3S', cat: 3, cost: 60000, sell: 85000, stock: 45, img: '/products/7.jpg' },
+            { name: 'ASUS ROG Swift 27" 4K', cat: 3, cost: 350000, sell: 495000, stock: 10, img: '/products/8.jpg' },
+            
+            // Networking (Cat 4)
+            { name: 'TP-Link Archer AX6000', cat: 4, cost: 180000, sell: 245000, stock: 20, img: '/products/9.jpg' },
+            { name: 'Ubiquiti Dream Machine Pro', cat: 4, cost: 450000, sell: 595000, stock: 6, img: '/products/10.jpg' },
+            
+            // Smart Devices (Cat 5)
+            { name: 'Echo Show 15', cat: 5, cost: 180000, sell: 235000, stock: 15, img: '/products/11.jpg' },
+            { name: 'Philips Hue Starter Kit', cat: 5, cost: 120000, sell: 165000, stock: 25, img: '/products/12.jpg' }
+        ];
+
+        for (let i = 0; i < products.length; i++) {
+            const p = products[i];
+            await connection.query(
+                `INSERT INTO article (name, slug, sku, description, category_id, image_url, cost_price, selling_price, stock, min_stock_threshold, published)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 5, true)`,
+                [p.name, slugify(p.name), generateSKU(p.name, i + 1), `${p.name} - High-End performance for modern professionals. Available at HI-TECH.`, p.cat, p.img, p.cost, p.sell, p.stock]
+            );
+        }
+
+        // 4. Coupons
         await connection.query(`
-            INSERT INTO admin (username, email, password) VALUES
-            ('admin', 'admin@maximus.com', 'admin123'),
-            ('superadmin', 'superadmin@maximus.com', 'super123')
+            INSERT INTO coupon (campaign_name, code, discount_type, discount_value, start_date, end_date, published) VALUES
+            ('Flash Modernization', 'HITECH24', 'percentage', 15.00, '2026-04-01 00:00:00', '2026-12-31 23:59:59', true),
+            ('New Customer', 'WELCOME_XAF', 'fixed', 25000.00, '2026-01-01 00:00:00', '2026-12-31 23:59:59', true),
+            ('Tech Anniversary', 'ANNIVERSARY_FIXED', 'fixed', 50000.00, '2026-04-01 00:00:00', '2026-05-31 23:59:59', true)
         `);
-        console.log('✅ Admin users seeded');
 
-        // Seed Customers
-        console.log('👤 Seeding customers...');
-        await connection.query(`
-            INSERT INTO customer (first_name, last_name, email, password, phone, address, city, postal_code) VALUES
-            ('John', 'Doe', 'john.doe@example.com', 'password123', '+1234567890', '123 Main St', 'New York', '10001'),
-            ('Jane', 'Smith', 'jane.smith@example.com', 'password123', '+0987654321', '456 Oak Ave', 'Los Angeles', '90001'),
-            ('Bob', 'Johnson', 'bob.johnson@example.com', 'password123', '+1122334455', '789 Pine Rd', 'Chicago', '60601')
-        `);
-        console.log('✅ Customers seeded');
+        // 5. Customers
+        await connection.query(
+            `INSERT INTO customer (first_name, last_name, email, password, phone, address, city, postal_code) VALUES
+            ('Marcel', 'Ngoubou', 'marcel.ngoubou@email.cm', ?, '+237612345678', 'Rue de la Paix, Bonanjo', 'Douala', 'BP 1234'),
+            ('Christelle', 'Tchamba', 'christelle.tchamba@email.cm', ?, '+237677890123', 'Avenue Kennedy, Akwa', 'Douala', 'BP 5678')`,
+            [customerPassword, customerPassword]
+        );
 
-        // Seed Articles (Products)
-        console.log('📦 Seeding articles...');
-        await connection.query(`
-            INSERT INTO article (name, description, price, stock_quantity, image_url, category_id) VALUES
-            ('iPhone 15 Pro', 'Latest Apple smartphone with A17 Pro chip', 1199.99, 50, '/images/iphone15pro.jpg', 2),
-            ('Samsung Galaxy S24', 'Premium Android smartphone', 999.99, 75, '/images/galaxys24.jpg', 2),
-            ('MacBook Pro 14"', 'Professional laptop with M3 Pro chip', 1999.99, 30, '/images/macbookpro.jpg', 3),
-            ('Dell XPS 15', 'High-performance Windows laptop', 1499.99, 40, '/images/dellxps.jpg', 3),
-            ('Sony WH-1000XM5', 'Premium noise-cancelling headphones', 349.99, 100, '/images/sonywh1000xm5.jpg', 4),
-            ('AirPods Pro 2', 'Apple wireless earbuds with ANC', 249.99, 150, '/images/airpodspro2.jpg', 4),
-            ('Apple Watch Series 9', 'Advanced smartwatch', 399.99, 60, '/images/applewatch9.jpg', 1),
-            ('USB-C Hub', 'Multi-port USB-C adapter', 49.99, 200, '/images/usbchub.jpg', 5),
-            ('Wireless Charger', 'Fast wireless charging pad', 29.99, 300, '/images/wirelesscharger.jpg', 5),
-            ('Laptop Stand', 'Ergonomic aluminum laptop stand', 79.99, 120, '/images/laptopstand.jpg', 5)
-        `);
-        console.log('✅ Articles seeded');
+        console.log('\nHI-TECH Database seeded successfully!');
 
-        // Seed Orders
-        console.log('🛒 Seeding orders...');
-        await connection.query(`
-            INSERT INTO orders (customer_id, status, total_amount) VALUES
-            (1, 'delivered', 1249.98),
-            (1, 'shipped', 349.99),
-            (2, 'pending', 1999.99),
-            (3, 'pending', 299.98)
-        `);
-        console.log('✅ Orders seeded');
-
-        // Seed Order Details
-        console.log('📋 Seeding order details...');
-        await connection.query(`
-            INSERT INTO order_details (order_id, article_id, quantity, unit_price) VALUES
-            (1, 1, 1, 1199.99),
-            (1, 8, 1, 49.99),
-            (2, 5, 1, 349.99),
-            (3, 3, 1, 1999.99),
-            (4, 6, 1, 249.99),
-            (4, 8, 1, 49.99)
-        `);
-        console.log('✅ Order details seeded');
-
-        // Seed Specifications
-        console.log('🔧 Seeding specifications...');
-        await connection.query(`
-            INSERT INTO specification (name) VALUES
-            ('5G Compatible'),
-            ('NVMe SSD'),
-            ('RTX Enabled'),
-            ('Under $1000'),
-            ('Waterproof'),
-            ('Noise Cancelling')
-        `);
-        console.log('✅ Specifications seeded');
-
-        // Seed Article Specifications
-        console.log('🔗 Seeding article specifications...');
-        await connection.query(`
-            INSERT INTO article_specification (article_id, specification_id) VALUES
-            (1, 1), (1, 4), -- iPhone 15 Pro: 5G, Under $1000 (Wait, iPhone is > 1000 in seed, I'll fix logic)
-            (2, 1), (2, 4), -- Samsung S24: 5G, Under $1000
-            (3, 2),         -- MacBook Pro: NVMe SSD
-            (4, 2), (4, 3), -- Dell XPS: NVMe, RTX
-            (5, 6),         -- Sony Headphones: Noise Cancelling
-            (6, 6)          -- AirPods: Noise Cancelling
-        `);
-        console.log('✅ Article specifications seeded');
-
-        console.log('\n🎉 Database seeding completed successfully!');
-        console.log('\n📊 Summary:');
-        console.log('  - 5 categories');
-        console.log('  - 2 admin users');
-        console.log('  - 3 customers');
-        console.log('  - 10 articles');
-        console.log('  - 6 specifications');
-        console.log('  - 4 orders');
-        console.log('  - 6 order details');
-
-        await connection.end();
     } catch (error) {
-        console.error('❌ Seeding failed:', error);
+        console.error('Seeding failed:', error);
         process.exit(1);
+    } finally {
+        await connection.end();
     }
 }
 

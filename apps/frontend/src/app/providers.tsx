@@ -1,24 +1,13 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState } from "react";
-import { AuthProvider } from "@/context/auth-context";
-import { CartProvider } from "@/context/cart-context";
+import React from "react";
 
-import { NuqsAdapter } from 'nuqs/adapters/next/app';
+type Props = {
+  children: React.ReactNode;
+};
 
-export function Providers({ children }: { children: React.ReactNode }) {
-    const [queryClient] = useState(() => new QueryClient());
+const Providers = ({ children }: Props) => {
+  return <>{children}</>;
+};
 
-    return (
-        <QueryClientProvider client={queryClient}>
-            <NuqsAdapter>
-                <AuthProvider>
-                    <CartProvider>
-                        {children}
-                    </CartProvider>
-                </AuthProvider>
-            </NuqsAdapter>
-        </QueryClientProvider>
-    );
-}
+export default Providers;

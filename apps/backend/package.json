@@ -3,7 +3,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias",
     "start": "node dist/index.js",
     "db:migrate": "tsx src/scripts/migrate.ts",
     "db:seed": "tsx src/scripts/seed.ts",
@@ -11,14 +11,25 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.9",
+    "@hono/zod-validator": "^0.4.3",
     "hono": "^4.11.4",
     "hono-file-router": "^0.0.5",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
     "mysql2": "^3.16.1",
-    "nuqs": "^2.8.6",
-    "tsconfig-paths": "^4.2.0"
+    "serve-static": "^1.16.2",
+    "tsconfig-paths": "^4.2.0",
+    "uuid": "^11.1.0",
+    "zod": "^3.24.3"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.8",
+    "@types/multer": "^1.4.12",
     "@types/node": "^20.11.17",
+    "@types/serve-static": "^1.15.7",
+    "@types/uuid": "^10.0.0",
+    "bcryptjs": "^3.0.3",
+    "tsc-alias": "^1.8.16",
     "tsx": "^4.7.1",
     "typescript": "^5.8.3"
   }

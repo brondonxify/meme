@@ -1,24 +1,9 @@
-import apiClient from '../lib/api';
-import { Customer } from 'shared';
+import { put } from '@/lib/api-client';
+import type { BackendCustomer } from '@/types/api';
 
 export const customersService = {
-    getAll: async () => {
-        const response = await apiClient.get<Customer[]>('/customers');
-        return response.data;
-    },
-
-    getById: async (id: number) => {
-        const response = await apiClient.get<Customer>(`/customers/${id}`);
-        return response.data;
-    },
-
-    update: async (id: number, customer: Partial<Customer>) => {
-        const response = await apiClient.put<{ message: string }>(`/customers/${id}`, customer);
-        return response.data;
-    },
-
-    delete: async (id: number) => {
-        const response = await apiClient.delete(`/customers/${id}`);
-        return response.data;
-    },
+  async updateProfile(data: Partial<BackendCustomer>): Promise<BackendCustomer> {
+    const response = await put<BackendCustomer>('/api/v1/customers/me', data);
+    return response.data;
+  },
 };

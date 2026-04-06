@@ -1,56 +1,50 @@
-import apiClient from '../lib/api';
-import { Admin, Customer } from 'shared';
+import { post, get, clearAuthToken } from '@/lib/api-client';
+import type { AuthResponse, LoginDto, RegisterDto, BackendCustomer } from '@/types/api';
 
-export interface LoginResponse {
-    token: string;
-    user: Admin | Customer;
-}
+const AUTH_TOKEN_KEY = 'auth-token';
 
 export const authService = {
-    // Admin Auth
-    adminLogin: async (credentials: Pick<Admin, 'username' | 'password'>) => {
-        const response = await apiClient.post<LoginResponse>('/auth/admin/login', credentials);
-        if (response.data.token) {
-            localStorage.setItem('admin_token', response.data.token);
-            localStorage.setItem('user', JSON.stringify(response.data.user));
-        }
-        return response.data;
-    },
+  async loginCustomer(email: string, password: string): Promise<AuthResponse> {
+    const response = await post<AuthResponse>('/api/v1/auth/customer/login', {
+      email,
+      password,
+    });
+    const data = response.data;
+    if (data.token) {
+      localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+    }
+    return data;
+  },
 
-    adminLogout: async () => {
-        await apiClient.post('/auth/admin/logout');
-        localStorage.removeItem('admin_token');
-        localStorage.removeItem('user');
-    },
+  async registerCustomer(data: RegisterDto): Promise<AuthResponse> {
+    const response = await post<AuthResponse>('/api/v1/auth/customer/register', data);
+    const result = response.data;
+    if (result.token) {
+      localStorage.setItem(AUTH_TOKEN_KEY, result.token);
+    }
+    return result;
+  },
 
-    getAdminProfile: async () => {
-        const response = await apiClient.get<Admin>('/auth/admin/me');
-        return response.data;
-    },
+  async getMe(): Promise<BackendCustomer | null> {
+    try {
+      const response = await get<BackendCustomer>('/api/v1/auth/customer/me');
+      return response.data;
+    } catch {
+      return null;
+    }
+  },
 
-    // Customer Auth
-    register: async (customer: Omit<Customer, 'id' | 'created_at'>) => {
-        const response = await apiClient.post<Customer>('/auth/register', customer);
-        return response.data;
-    },
+  logout(): void {
+    clearAuthToken();
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  },
 
-    login: async (credentials: Pick<Customer, 'email' | 'password'>) => {
-        const response = await apiClient.post<LoginResponse>('/auth/login', credentials);
-        if (response.data.token) {
-            localStorage.setItem('customer_token', response.data.token);
-            localStorage.setItem('user', JSON.stringify(response.data.user));
-        }
-        return response.data;
-    },
+  getToken(): string | null {
+    if (typeof window === 'undefined') return null;
+    return localStorage.getItem(AUTH_TOKEN_KEY);
+  },
 
-    logout: async () => {
-        await apiClient.post('/auth/logout');
-        localStorage.removeItem('customer_token');
-        localStorage.removeItem('user');
-    },
-
-    getProfile: async () => {
-        const response = await apiClient.get<Customer>('/auth/me');
-        return response.data;
-    },
+  isAuthenticated(): boolean {
+    return !!this.getToken();
+  },
 };

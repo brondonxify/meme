@@ -1,29 +1,18 @@
-import apiClient from '../lib/api';
-import { Category } from 'shared';
+import { get } from '@/lib/api-client';
+import type { BackendCategory, PaginatedResponse } from '@/types/api';
 
 export const categoriesService = {
-    getAll: async () => {
-        const response = await apiClient.get<Category[]>('/categories');
-        return response.data;
-    },
+  async getAll(): Promise<BackendCategory[]> {
+    const response = await get<PaginatedResponse<BackendCategory>>('/api/v1/categories');
+    return response.data?.items || response.data || [];
+  },
 
-    getById: async (id: number) => {
-        const response = await apiClient.get<Category>(`/categories/${id}`);
-        return response.data;
-    },
-
-    create: async (category: Omit<Category, 'id'>) => {
-        const response = await apiClient.post<Category>('/categories', category);
-        return response.data;
-    },
-
-    update: async (id: number, category: Partial<Category>) => {
-        const response = await apiClient.put<Category>(`/categories/${id}`, category);
-        return response.data;
-    },
-
-    delete: async (id: number) => {
-        const response = await apiClient.delete(`/categories/${id}`);
-        return response.data;
-    },
+  async getById(id: number): Promise<BackendCategory | null> {
+    try {
+      const response = await get<BackendCategory>(`/api/v1/categories/${id}`);
+      return response.data;
+    } catch {
+      return null;
+    }
+  },
 };

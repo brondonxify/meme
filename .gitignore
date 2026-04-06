@@ -38,6 +38,8 @@ out/
 # AI tools
 .agent/
 .kilocode/
+.agents/
+.sisyphus/
 
 # Temp files
 src_files.txt

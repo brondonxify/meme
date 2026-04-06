@@ -1,21 +1,20 @@
-import type { Metadata } from "next";
-import { Space_Grotesk, Playfair_Display } from "next/font/google";
-import "./globals.css";
-import { Providers } from "./providers";
-
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
-  subsets: ["latin"],
-});
-
-const playfairDisplay = Playfair_Display({
-  variable: "--font-playfair",
-  subsets: ["latin"],
-});
+import type { Metadata, Viewport } from "next";
+import "@/styles/globals.css";
+import { satoshi } from "@/styles/fonts";
+import TopBanner from "@/components/layout/Banner/TopBanner";
+import TopNavbar from "@/components/layout/Navbar/TopNavbar";
+import Footer from "@/components/layout/Footer";
+import HolyLoader from "holy-loader";
+import Providers from "./providers";
+import { AuthProvider } from "@/contexts/auth-context";
 
 export const metadata: Metadata = {
-  title: "HI-TECH - Premium Hardware",
-  description: "High-performance tech gear",
+  title: "HI-TECH",
+  description: "Premium tech products, delivered fast",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#000000",
 };
 
 export default function RootLayout({
@@ -25,12 +24,16 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${spaceGrotesk.variable} ${playfairDisplay.variable} font-sans antialiased min-h-screen flex flex-col`}
-      >
+      <body className={satoshi.className}>
+        <HolyLoader color="#868686" />
         <Providers>
-          {children}
+          <AuthProvider>
+            <TopBanner />
+            <TopNavbar />
+            {children}
+          </AuthProvider>
         </Providers>
+        <Footer />
       </body>
     </html>
   );
